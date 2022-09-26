@@ -302,7 +302,7 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
     j = 0;
     for result in results:
         j += 1;
-        if 'title' in result and 'title' in refobj:
+        if 'title' in result and result['title'] and 'title' in refobj and refobj['title']:
             print('Comparing refobj title to website title:');
             dist = distance(result['title'],refobj['title']);
             cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],dist,None,dist<=max_rel_diff[0],dist<=max_rel_diff[0] and j==1));
@@ -312,7 +312,7 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
                 continue;
             else:
                 print('Titles too different with distance',dist);
-        if 'title' in result and 'reference' in refobj:
+        if 'title' in result and result['title'] and 'reference' in refobj and refobj['reference']:
             print('Comparing refobj refstr to website title:');
             dist = distance(result['title'],refobj['reference']);
             cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],None,dist,dist<=max_rel_diff[1],dist<=max_rel_diff[1] and j==1,));
