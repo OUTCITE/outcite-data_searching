@@ -3,15 +3,24 @@ from scipy.optimize import linear_sum_assignment as LSA
 from difflib import SequenceMatcher as SM
 from copy import deepcopy as copy
 from elasticsearch import Elasticsearch as ES
+import requests
 import re
 import time
 import sys
+import sqlite3
+import urllib.request
+from lxml import html as lhtml
+import signal
+from pathlib import Path
 
-_max_extract_time = 10; #minutes
-_max_scroll_tries = 2;
+
+_max_extract_time =  10; #minutes
+_max_scroll_tries =   2;
 _scroll_size      = 100;
 
-_max_val_len = 512;
+_max_val_len   = 2048;
+_min_title_len =   12;
+
 #'''
 _refobjs = [    'anystyle_references_from_cermine_fulltext',
                 'anystyle_references_from_cermine_refstrings',
@@ -23,6 +32,8 @@ _refobjs = [    'anystyle_references_from_cermine_fulltext',
                 ];
 
 _ids     = None;#['GaS_2000_0001'];#["gesis-ssoar-29359","gesis-ssoar-55603","gesis-ssoar-37157","gesis-ssoar-5917","gesis-ssoar-21970"];#None
+
+_query_db = str((Path(__file__).parent / '../').resolve())+'/queries.db';
 #'''
 #_refobjs = [ 'anystyle_references_from_gold_refstrings' ];
 
@@ -63,7 +74,6 @@ def merge(d, u):
         elif v != dict():                               # anything else is replaced
             d[k] = v;
     return d;
-
 
 def transform(result,transformap):
     matchobj = dict();
@@ -109,11 +119,71 @@ def transform(result,transformap):
                 del matchobj[key];
     return matchobj;
 
-def distance(a,b):
+def handler(signum, frame):
+    print("Took too long. Breaking...")
+    raise Exception("Timeout")
+
+def load_html(url):
+    IN    = urllib.request.urlopen(url);
+    bytes = IN.read();
+    html  = bytes.decode("utf8");
+    IN.close();
+    return html;
+
+def parse_html(string):
+    html = lhtml.fromstring(string);
+    return html;
+
+def html_extract_title(html):
+    for head in html.iter("head"):
+        for title in head.iter("title"):
+            return title.text;
+    return None;
+
+def url_complete(title,url):
+    if " ..." in title:
+        print(title,'seems to be abbreviated. Trying to load full title from',url,'...');
+        url_title = None;
+        signal.signal(signal.SIGALRM, handler);
+        signal.alarm(10);
+        try:
+            url_title = html_extract_title(parse_html(load_html(url)));
+        except Exception as e:
+            print(e,'\n','Failed to load title from URL.');
+        signal.alarm(0);
+        if url_title:
+            print('Got url title',url_title);
+            if len(url_title) > len(title):
+                title = url_title;
+    return title;
+
+def distance_(a,b):
     a,b        = a.lower(), b.lower();
     s          = SM(None,a,b);
     overlap    = sum([block.size for block in s.get_matching_blocks()]);
-    return 1-(overlap / max([len(a),len(b)]));
+    dist       = 1-(overlap / max([len(a),len(b)]));
+    print(a,'|',dist)
+    return dist;
+
+def distance__(a,b):
+    if min(len(a),len(b)) < _min_title_len:
+        return 1.0;
+    a,b        = a.lower(), b.lower();
+    s          = SM(None,a,b);
+    overlap    = sum([block.size for block in s.get_matching_blocks()]);
+    dist       = 1-(overlap / min([len(a),len(b)]));
+    print(a,'|',dist)
+    return dist;
+
+def distance(a,b):
+    if min(len(a),len(b)) < _min_title_len:
+        return 1.0;
+    a,b        = a.lower(), b.lower();
+    s          = SM(None,a,b);
+    overlap    = sum([block.size for block in s.get_matching_blocks()]);
+    dist       = 1-(overlap / len(b));
+    print(a,'|',b,'|',dist)
+    return dist;
 
 def distance_2(a,b):
     a,b      = a.lower(), b.lower();
@@ -201,47 +271,88 @@ def compare_refobject(P_dict,T_dict,threshold):                       # Two dict
         costs                                                          += [(TP_key,cost_,)                     for cost_                      in costs_      ];
     return TP/P, TP/T, TP, P, T, matches, mismatches, mapping, costs;
 
-def get_best_match(refobj,results,great_score,ok_score,max_rel_diff):
-    TITLE = True if 'title' in refobj and refobj['title'] else False;
-    query = refobj['title'] if TITLE else refobj['reference'];
+def bing_web_search(query,api_address,api_key,api_tps):
+    time.sleep(1.0/api_tps) #TODO: Comment out!
+    headers   = {"Ocp-Apim-Subscription-Key": api_key};
+    params    = { "q": query, "textDecorations": False, "textFormat": "HTML", "count":3, "responseFilter":["Webpages"]};
+    response  = requests.get(api_address, headers=headers, params=params);    response.raise_for_status();
+    responses = response.json();
+    results   = [{'title':url_complete(page['name'],page['url']), 'url':page['url'], 'snippet':page['snippet'], 'language':page['language']} for page in responses['webPages']['value'] if 'name' in page and 'url' in page and 'snippet' in page and 'language' in page] if 'webPages' in responses and 'value' in responses['webPages'] and len(responses['webPages']['value'])>0 else [];
+    return results;
+
+
+def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff,cur):
+    #-----------------------------------------------------------------------------------------------------
+    #TITLE = True if 'title' in refobj and refobj['title'] else False;
+    query = args[0]; #refobj['title'] if TITLE else refobj['reference'];
+    #-----------------------------------------------------------------------------------------------------
+    results = None;
+    rows    = cur.execute("SELECT title,url,snippet,language,title_dist,refstr_dist FROM queries WHERE query=?",(query,)).fetchall();
+    if len(rows) > 0:
+        print('Found query in database, skipping web search.');
+        results = [{'title':title,'url':url,'snippet':snippet,'language':language,'title_dist':title_dist,'refstr_dist':refstr_dist} for title,url,snippet,language,title_dist,refstr_dist in rows];
+    else:
+        results = bing_web_search(*args);
+    #-----------------------------------------------------------------------------------------------------
     if len(results) > 0:
         print('____________________________________________________________________________________________________________\n____________________________________________________________________________________________________________\n'+query+'\n____________________________________________________________________________________________________________');#,results[0][0]['id'],'\n',results[0][0]['title'],'\n',results[0][1],'\n-------------------------------------------');
     else:
         return None;
-    #TODO: Do some bing specific matching of the returned results and the refobj
-    return results[0]['url']; #TODO: Check field name of output!
+    results_ = [];
+    j = 0;
+    for result in results:
+        j += 1;
+        if 'title' in result and 'title' in refobj:
+            print('Comparing refobj title to website title:');
+            dist = distance(result['title'],refobj['title']);
+            cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],dist,None,dist<=max_rel_diff[0],dist<=max_rel_diff[0] and j==1));
+            if dist <= max_rel_diff[0]:
+                result['refstr_dist'],result['title_dist'] = None,dist;
+                results_.append(result);
+                continue;
+            else:
+                print('Titles too different with distance',dist);
+        if 'title' in result and 'reference' in refobj:
+            print('Comparing refobj refstr to website title:');
+            dist = distance(result['title'],refobj['reference']);
+            cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],None,dist,dist<=max_rel_diff[1],dist<=max_rel_diff[1] and j==1,));
+            if dist <= max_rel_diff[1]:
+                result['refstr_dist'],result['title_dist'] = dist,None;
+                results_.append(result);
+    #results_ = [result for result in results if ('title' in result and 'title' in refobj and distance(result['title'],refobj['title'])<=max_rel_diff[0]) or ('title' in result and 'reference' in refobj and distance(result['title'],refobj['reference'])<=max_rel_diff[1])];
+    print(len(results_),' of 3 results left after checking.');
+    return results_[0]['url'] if len(results_)>0 else None;
 
-def bing_web_search(query): #TODO: Restrict return to top three and only relevant fields
-    headers  = {"Ocp-Apim-Subscription-Key": _api_key};
-    params   = { "q": query, "textDecorations": True, "textFormat": "HTML" };
-    response = requests.get(_api_address, headers=headers, params=params);
-    response.raise_for_status();
-    return response.json(); #TODO: Is this already a dict structure?
-
-def find(refobjects,index,api_address,api_key,field,great_score,ok_score,max_rel_diff):
+def find(refobjects,index,api_address,api_key,api_tps,field,great_score,ok_score,max_rel_diff,cur):
     ids = [];
     for i in range(len(refobjects)):
+        if ('sowiport_url' in refobjects[i] and refobjects[i]['sowiport_url']) or ('crossref_url' in refobjects[i] and refobjects[i]['crossref_url']) or ('dnb_url' in refobjects[i] and refobjects[i]['dnb_url']) or ('openalex_url' in refobjects[i] and refobjects[i]['openalex_url']):
+            continue;
         ID    = None;
         query = None;
-        if 'title' in refobjects[i] and refobjects[i]['title']:
-            query = refobjects[i]['title'][:_max_val_len];
-        elif 'reference' in refobjects[i] and refobjects[i]['reference']:
+        if 'reference' in refobjects[i] and refobjects[i]['reference']:
             query = refobjects[i]['reference'][:_max_val_len];
+            if 'title' in refobjects[i] and refobjects[i]['title']:
+                query += ' prefer:"'+refobjects[i]['title'][:_max_val_len]+'"';
         else:
             print('Neither title nor reference in refobject!');
             continue;
-        results = bing_web_search(query);
-        #results = [(result['_source'],result['_score'],) for result in results]; #TODO: Get pair of content and ranking score
-        ID = get_best_match(refobjects[i],results,great_score,ok_score,max_rel_diff);
+        ID = get_best_match(bing_web_search,[query,api_address,api_key,api_tps],refobjects[i],great_score,ok_score,max_rel_diff,cur);
         if ID != None:
             refobjects[i][field[:-1]] = ID;
             ids.append(ID);
     return set(ids), refobjects;
 
-def search(field,index,api_address,api_key,great_score,ok_score,max_rel_diff,recheck):
+def search(field,index,api_address,api_key,api_tps,great_score,ok_score,max_rel_diff,recheck):
     #----------------------------------------------------------------------------------------------------------------------------------
-    body            = { '_op_type': 'update', '_index': index, '_id': None, '_source': { 'doc': { 'has_'+field: True, field: None } } };
-    scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':{'term':{'has_'+field: True}}}} if not recheck else {'match_all':{}};
+    body            = { '_op_type': 'update', '_index': index, '_id': None, '_source': { 'doc': { 'has_'+field: True, field: None } } }; #TODO: The scroll query is both wrong and does not work!
+    #scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':[{'term':{'has_'+field: True}},{'exists':{'field':'sowiport_ids'}},{'exists':{'field':'crossref_ids'}},{'exists':{'field':'dnb_ids'}},{'exists':{'field':'openalex_ids'}}]}} if not recheck else {'bool':{'must_not':[{'exists':{'field':'sowiport_ids'}},{'exists':{'field':'crossref_ids'}},{'exists':{'field':'dnb_ids'}},{'exists':{'field':'openalex_ids'}}]}};
+    scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':[{'term':{'has_'+field: True}}]}} if not recheck else {'match_all':{}};
+    con             = sqlite3.connect(_query_db);
+    cur             = con.cursor();
+    #----------------------------------------------------------------------------------------------------------------------------------
+    cur.execute("CREATE TABLE IF NOT EXISTS queries(query TEXT, title TEXT, url TEXT, snippet TEXT, language TEXT, title_dist REAL, refstr_dist REAL, matched INT, used INT, UNIQUE (query,url) ON CONFLICT REPLACE)");
+    cur.execute("CREATE INDEX IF NOT EXISTS queries_query_index ON queries(query)"); #TODO: May want to load as dictionary and then executemany inserts at the end of session or every n iterations
     #----------------------------------------------------------------------------------------------------------------------------------
     print('------------------->',scr_query);
     client   = ES(['localhost'],scheme='http',port=9200,timeout=60);
@@ -258,14 +369,15 @@ def search(field,index,api_address,api_key,great_score,ok_score,max_rel_diff,rec
             ids         = set(doc['_source'][field]) if field in doc['_source'] and doc['_source'][field] != None else set([]);
             for refobj in _refobjs:
                 previous_refobjects            = doc['_source'][refobj] if refobj in doc['_source'] and doc['_source'][refobj] else None;
-                new_ids, new_refobjects        = find(previous_refobjects,index,api_address,api_key,field,great_score,ok_score,max_rel_diff) if isinstance(previous_refobjects,list) else (set([]),previous_refobjects,[]);
+                new_ids, new_refobjects        = find(previous_refobjects,index,api_address,api_key,api_tps,field,great_score,ok_score,max_rel_diff,cur) if isinstance(previous_refobjects,list) else (set([]),previous_refobjects);
                 ids                           |= new_ids;
                 body['_source']['doc'][refobj] = new_refobjects; # The updated ones
+                con.commit();
                 print('-->',refobj,'gave',['','no '][len(new_ids)==0]+'ids',', '.join(new_ids),'\n');
             print('------------------------------------------------\n-- overall ids --------------------------------\n'+', '.join(ids)+'\n------------------------------------------------');
             body['_source']['doc'][field]        = list(ids) #if len(ids) > 0 else None;
             body['_source']['doc']['has_'+field] = True      #if len(ids) > 0 else False;
-            yield body;
+            yield body; #TODO: not sure if anything got updated...
         scroll_tries = 0;
         while scroll_tries < _max_scroll_tries:
             try:
