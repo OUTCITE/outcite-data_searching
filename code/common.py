@@ -16,7 +16,7 @@ from pathlib import Path
 
 _max_extract_time =  10; #minutes
 _max_scroll_tries =   2;
-_scroll_size      = 100;
+_scroll_size      = 10;
 
 _max_val_len   = 2048;
 _min_title_len =   12;
