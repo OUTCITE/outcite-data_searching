@@ -181,7 +181,19 @@ def distance(a,b):
     a,b        = a.lower(), b.lower();
     s          = SM(None,a,b);
     overlap    = sum([block.size for block in s.get_matching_blocks()]);
+    #substring  = max([block.size for block in s.get_matching_blocks()]);
     dist       = 1-(overlap / len(b));
+    print(a,'|',b,'|',dist)
+    return dist;
+
+def distance_new(a,b): #TODO: TEST AND IMPROVE!
+    if min(len(a),len(b)) < _min_title_len:
+        return 1.0;
+    a,b        = a.lower(), b.lower();
+    s          = SM(None,a,b);
+    overlap    = sum([block.size for block in s.get_matching_blocks()]);
+    substring  = max([block.size for block in s.get_matching_blocks()]);
+    dist       = 1-(substring/overlap)#1-(overlap / len(b));
     print(a,'|',b,'|',dist)
     return dist;
 
@@ -289,10 +301,11 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
     results = None;
     rows    = cur.execute("SELECT title,url,snippet,language,title_dist,refstr_dist FROM queries WHERE query=?",(query,)).fetchall();
     if len(rows) > 0:
-        print('Found query in database, skipping web search.');
+        print('Found query "', query, '" in database, skipping web search.');
         results = [{'title':title,'url':url,'snippet':snippet,'language':language,'title_dist':title_dist,'refstr_dist':refstr_dist} for title,url,snippet,language,title_dist,refstr_dist in rows];
     else:
-        results = bing_web_search(*args);
+        print('Did not find query "', query, '" in database, calling Bing Web API...');
+        results = search_function(*args);
     #-----------------------------------------------------------------------------------------------------
     if len(results) > 0:
         print('____________________________________________________________________________________________________________\n____________________________________________________________________________________________________________\n'+query+'\n____________________________________________________________________________________________________________');#,results[0][0]['id'],'\n',results[0][0]['title'],'\n',results[0][1],'\n-------------------------------------------');
@@ -301,8 +314,12 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
     results_ = [];
     j = 0;
     for result in results:
-        j += 1;
-        if 'title' in result and result['title'] and 'title' in refobj and refobj['title']:
+        result['title']    = None if not 'title'    in result else result['title'];
+        result['url']      = None if not 'url'      in result else result['url'];
+        result['snippet']  = None if not 'snippet'  in result else result['snippet'];
+        result['language'] = None if not 'language' in result else result['language'];
+        j  += 1;
+        if result['title'] and 'title' in refobj and refobj['title']:
             print('Comparing refobj title to website title:');
             dist = distance(result['title'],refobj['title']);
             cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],dist,None,dist<=max_rel_diff[0],dist<=max_rel_diff[0] and j==1));
@@ -312,14 +329,19 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
                 continue;
             else:
                 print('Titles too different with distance',dist);
-        if 'title' in result and result['title'] and 'reference' in refobj and refobj['reference']:
+        if result['title'] and 'reference' in refobj and refobj['reference']:
             print('Comparing refobj refstr to website title:');
             dist = distance(result['title'],refobj['reference']);
             cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],None,dist,dist<=max_rel_diff[1],dist<=max_rel_diff[1] and j==1,));
             if dist <= max_rel_diff[1]:
                 result['refstr_dist'],result['title_dist'] = dist,None;
                 results_.append(result);
-    #results_ = [result for result in results if ('title' in result and 'title' in refobj and distance(result['title'],refobj['title'])<=max_rel_diff[0]) or ('title' in result and 'reference' in refobj and distance(result['title'],refobj['reference'])<=max_rel_diff[1])];
+                continue;
+            else:
+                print('Title and reference too different with distance',dist);
+        cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,result['title'],result['url'],result['snippet'],result['language'],None,None,None,None,));
+    if len(results) == 0:
+        cur.execute("INSERT INTO queries VALUES(?,?,?,?,?,?,?,?,?)",(query,None,None,None,None,None,None,None,None,));
     print(len(results_),' of 3 results left after checking.');
     return results_[0]['url'] if len(results_)>0 else None;
 

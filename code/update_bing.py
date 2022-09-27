@@ -19,7 +19,7 @@ _great_score  = [100,50]; #TODO: Adjust
 _ok_score     = [36,18]; #TODO: Adjust
 _max_rel_diff = [0.4,0.33]; #TODO: Adjust
 
-_recheck = True;
+_recheck = False;
 
 #====================================================================================
 _api_address = "https://api.bing.microsoft.com/v7.0/search"; #"https://api.bing.microsoft.com/v7.0/custom/search";
