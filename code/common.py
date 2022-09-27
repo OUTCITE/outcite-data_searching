@@ -28,7 +28,8 @@ _refobjs = [    'anystyle_references_from_cermine_fulltext',
                 'anystyle_references_from_grobid_refstrings',   #                'anystyle_references_from_gold_fulltext',
                 'cermine_references_from_cermine_refstrings',          #                'anystyle_references_from_gold_refstrings',
                 'cermine_references_from_grobid_refstrings',#,    #                'cermine_references_from_gold_refstrings',
-                'grobid_references_from_grobid_xml'
+                'grobid_references_from_grobid_xml',
+                'exparser_references_from_cermine_layout'
                 ];
 
 _ids     = None;#['GaS_2000_0001'];#["gesis-ssoar-29359","gesis-ssoar-55603","gesis-ssoar-37157","gesis-ssoar-5917","gesis-ssoar-21970"];#None
