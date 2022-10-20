@@ -23,7 +23,7 @@ _recheck = False;
 
 #====================================================================================
 _api_address = "https://api.bing.microsoft.com/v7.0/search"; #"https://api.bing.microsoft.com/v7.0/custom/search";
-_api_key     = "5a015f4afccb43a1a42a53b564b7bc70"#"241948e1f88744068c3e7df046577981";#"8fd4bec3208a48319838efff6d3e08c0";
+_api_key     = "6558d5b67a784007b0e97938952b5e49"#"241948e1f88744068c3e7df046577981";#"8fd4bec3208a48319838efff6d3e08c0";
 _api_tps     = 3#100;#150
 _to_field    = 'bing_urls';
 #====================================================================================
