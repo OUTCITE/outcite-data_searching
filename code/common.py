@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.optimize import linear_sum_assignment as LSA
-from difflib import SequenceMatcher as SM
 from copy import deepcopy as copy
 from elasticsearch import Elasticsearch as ES
 import requests
@@ -12,6 +11,7 @@ import urllib.request
 from lxml import html as lhtml
 import signal
 from pathlib import Path
+from suffix_trees import STree
 
 
 _max_extract_time =  10; #minutes
@@ -158,52 +158,41 @@ def url_complete(title,url):
                 title = url_title;
     return title;
 
-def distance_(a,b):
-    a,b        = a.lower(), b.lower();
-    s          = SM(None,a,b);
-    overlap    = sum([block.size for block in s.get_matching_blocks()]);
-    dist       = 1-(overlap / max([len(a),len(b)]));
-    print(a,'|',dist)
-    return dist;
+def longest_common_substring(s1,s2):
+    st    = STree.STree([s1,s2]);
+    match = st.lcs();
+    return match, len(match);
 
-def distance__(a,b):
-    if min(len(a),len(b)) < _min_title_len:
-        return 1.0;
-    a,b        = a.lower(), b.lower();
-    s          = SM(None,a,b);
-    overlap    = sum([block.size for block in s.get_matching_blocks()]);
-    dist       = 1-(overlap / min([len(a),len(b)]));
-    print(a,'|',dist)
-    return dist;
+def longest_common_subsequence(s1,s2):
+    matrix = [["" for x in range(len(s2))] for x in range(len(s1))];
+    for i in range(len(s1)):
+        for j in range(len(s2)):
+            if s1[i] == s2[j]:
+                if i == 0 or j == 0:
+                    matrix[i][j] = s1[i];
+                else:
+                    matrix[i][j] = matrix[i-1][j-1] + s1[i];
+            else:
+                matrix[i][j] = max(matrix[i-1][j], matrix[i][j-1], key=len);
+    cs = matrix[-1][-1];
+    return cs, len(cs);
 
 def distance(a,b):
     if min(len(a),len(b)) < _min_title_len:
         return 1.0;
-    a,b        = a.lower(), b.lower();
-    s          = SM(None,a,b);
-    overlap    = sum([block.size for block in s.get_matching_blocks()]);
-    #substring  = max([block.size for block in s.get_matching_blocks()]);
-    dist       = 1-(overlap / len(b));
-    print(a,'|',b,'|',dist)
-    return dist;
+    subseq,seqlen = longest_common_subsequence(a.lower(), b.lower());
+    distance      = 1-(seqlen / min([len(a),len(b)]));
+    print(a,'|',b,'|',subseq,'|',distance);
+    return distance;
 
-def distance_new(a,b): #TODO: TEST AND IMPROVE!
+def distance_new(a,b): #TODO: I think this is better than the old version and it can be deployed
     if min(len(a),len(b)) < _min_title_len:
         return 1.0;
-    a,b        = a.lower(), b.lower();
-    s          = SM(None,a,b);
-    overlap    = sum([block.size for block in s.get_matching_blocks()]);
-    substring  = max([block.size for block in s.get_matching_blocks()]);
-    dist       = 1-(substring/overlap)#1-(overlap / len(b));
-    print(a,'|',b,'|',dist)
-    return dist;
-
-def distance_2(a,b):
-    a,b      = a.lower(), b.lower();
-    s        = SM(None,a,b);
-    overlap  = sum([block.size for block in s.get_matching_blocks()]);
-    dist     = max([len(a),len(b)]) - overlap;
-    return dist;
+    subseq,seqlen = longest_common_subsequence(a.lower(), b.lower());
+    substr,strlen = longest_common_substring(  a.lower(), b.lower());
+    distance      = 1-(strlen / seqlen);
+    print(a,'|',b,'|',subseq,'|',substr,'|',distance);
+    return distance;
 
 def flatten(d, parent_key='', sep='_'):
     items = [];
@@ -319,7 +308,7 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
         result['url']      = None if not 'url'      in result else result['url'];
         result['snippet']  = None if not 'snippet'  in result else result['snippet'];
         result['language'] = None if not 'language' in result else result['language'];
-        j  += 1;
+        j += 1;
         if result['title'] and 'title' in refobj and refobj['title']:
             print('Comparing refobj title to website title:');
             dist = distance(result['title'],refobj['title']);
