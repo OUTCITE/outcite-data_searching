@@ -13,26 +13,17 @@ import signal
 from pathlib import Path
 from suffix_trees import STree
 
+_max_extract_time = _configs["max_extract_time"]; #minutes
+_max_scroll_tries = _configs["max_scroll_tries"];
+_scroll_size      = _configs["scroll_size"];
 
-_max_extract_time =  10; #minutes
-_max_scroll_tries =   2;
-_scroll_size      = 10;
-
-_max_val_len   = 2048;
-_min_title_len =   12;
+_max_val_len   = _configs["max_val_len"];
+_min_title_len = _configs["min_title_len"];
 
 #'''
-_refobjs = [    'anystyle_references_from_cermine_fulltext',
-                'anystyle_references_from_cermine_refstrings',
-                'anystyle_references_from_grobid_fulltext',
-                'anystyle_references_from_grobid_refstrings',   #                'anystyle_references_from_gold_fulltext',
-                'cermine_references_from_cermine_refstrings',          #                'anystyle_references_from_gold_refstrings',
-                'cermine_references_from_grobid_refstrings',#,    #                'cermine_references_from_gold_refstrings',
-                'grobid_references_from_grobid_xml',
-                'exparser_references_from_cermine_layout'
-                ];
+_refobjs = _configs["refobjs"];
 
-_ids     = None;#['GaS_2000_0001'];#["gesis-ssoar-29359","gesis-ssoar-55603","gesis-ssoar-37157","gesis-ssoar-5917","gesis-ssoar-21970"];#None
+_ids     = _configs["ids"];#['GaS_2000_0001'];#["gesis-ssoar-29359","gesis-ssoar-55603","gesis-ssoar-37157","gesis-ssoar-5917","gesis-ssoar-21970"];#None
 
 _query_db = str((Path(__file__).parent / '../').resolve())+'/queries.db';
 #'''

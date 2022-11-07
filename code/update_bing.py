@@ -10,16 +10,25 @@ from common import *
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 #-GLOBAL OBJECTS----------------------------------------------------------------------------------------------------------------------------------
 _index            = sys.argv[1]; #'geocite' #'outcite_ssoar' #'ssoar_gold'
-_chunk_size       = 10;
-_max_scroll_tries = 2;
-_scroll_size      = 10;
-_requestimeout    =  60;
 
-_great_score  = [100,50]; #TODO: Adjust
-_ok_score     = [36,18]; #TODO: Adjust
-_max_rel_diff = [0.4,0.33]; #TODO: Adjust
+IN = None;
+try:
+    IN = open(str((Path(__file__).parent / '../code/').resolve())+'/configs_custom.json');
+except:
+    IN = open(str((Path(__file__).parent / '../code/').resolve())+'/configs.json');
+_configs = json.load(IN);
+IN.close();
 
-_recheck = False;
+_chunk_size       = _configs['chunk_size'];
+_max_scroll_tries = _configs['max_scroll_tries'];
+_scroll_size      = _configs['scroll_size'];
+_requestimeout    = _configs['requestimeout'];
+
+_great_score  = _configs['great_score']; #TODO: Adjust
+_ok_score     = _configs['ok_score']; #TODO: Adjust
+_max_rel_diff = _configs['max_rel_diff']; #TODO: Adjust
+
+_recheck = _configs['recheck'];
 
 #====================================================================================
 _api_address = "https://api.bing.microsoft.com/v7.0/search"; #"https://api.bing.microsoft.com/v7.0/custom/search";
