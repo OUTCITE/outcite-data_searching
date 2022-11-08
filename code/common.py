@@ -7,11 +7,20 @@ import re
 import time
 import sys
 import sqlite3
+import json
 import urllib.request
 from lxml import html as lhtml
 import signal
 from pathlib import Path
 from suffix_trees import STree
+
+IN = None;
+try:
+    IN = open(str((Path(__file__).parent / '../code/').resolve())+'/configs_custom.json');
+except:
+    IN = open(str((Path(__file__).parent / '../code/').resolve())+'/configs.json');
+_configs = json.load(IN);
+IN.close();
 
 _max_extract_time = _configs["max_extract_time"]; #minutes
 _max_scroll_tries = _configs["max_scroll_tries"];
@@ -348,9 +357,9 @@ def find(refobjects,index,api_address,api_key,api_tps,field,great_score,ok_score
 
 def search(field,index,api_address,api_key,api_tps,great_score,ok_score,max_rel_diff,recheck):
     #----------------------------------------------------------------------------------------------------------------------------------
-    body            = { '_op_type': 'update', '_index': index, '_id': None, '_source': { 'doc': { 'has_'+field: True, field: None } } }; #TODO: The scroll query is both wrong and does not work!
-    #scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':[{'term':{'has_'+field: True}},{'exists':{'field':'sowiport_ids'}},{'exists':{'field':'crossref_ids'}},{'exists':{'field':'dnb_ids'}},{'exists':{'field':'openalex_ids'}}]}} if not recheck else {'bool':{'must_not':[{'exists':{'field':'sowiport_ids'}},{'exists':{'field':'crossref_ids'}},{'exists':{'field':'dnb_ids'}},{'exists':{'field':'openalex_ids'}}]}};
-    scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':[{'term':{'has_'+field: True}}]}} if not recheck else {'match_all':{}};
+    body            = { '_op_type': 'update', '_index': index, '_id': None, '_source': { 'doc': { 'processed_'+field: True, field: None } } }; #TODO: The scroll query is both wrong and does not work!
+    #scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':[{'term':{'processed_'+field: True}},{'exists':{'field':'sowiport_ids'}},{'exists':{'field':'crossref_ids'}},{'exists':{'field':'dnb_ids'}},{'exists':{'field':'openalex_ids'}}]}} if not recheck else {'bool':{'must_not':[{'exists':{'field':'sowiport_ids'}},{'exists':{'field':'crossref_ids'}},{'exists':{'field':'dnb_ids'}},{'exists':{'field':'openalex_ids'}}]}};
+    scr_query       = { "ids": { "values": _ids } } if _ids else {'bool':{'must_not':[{'term':{'processed_'+field: True}}]}} if not recheck else {'match_all':{}};
     con             = sqlite3.connect(_query_db);
     cur             = con.cursor();
     #----------------------------------------------------------------------------------------------------------------------------------
@@ -378,8 +387,9 @@ def search(field,index,api_address,api_key,api_tps,great_score,ok_score,max_rel_
                 con.commit();
                 print('-->',refobj,'gave',['','no '][len(new_ids)==0]+'ids',', '.join(new_ids),'\n');
             print('------------------------------------------------\n-- overall ids --------------------------------\n'+', '.join(ids)+'\n------------------------------------------------');
-            body['_source']['doc'][field]        = list(ids) #if len(ids) > 0 else None;
-            body['_source']['doc']['has_'+field] = True      #if len(ids) > 0 else False;
+            body['_source']['doc'][field]              = list(ids) #if len(ids) > 0 else None;
+            body['_source']['doc']['has_'+field]       = len(ids) > 0;
+            body['_source']['doc']['processed_'+field] = True      #if len(ids) > 0 else False;
             yield body; #TODO: not sure if anything got updated...
         scroll_tries = 0;
         while scroll_tries < _max_scroll_tries:

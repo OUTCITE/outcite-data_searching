@@ -26,5 +26,9 @@
     "ok_score":     [36,18],
     "max_rel_diff": [0.4,0.33],
 
-    "recheck": false
+    "recheck": false,
+
+    "api_address": "https://api.bing.microsoft.com/v7.0/search",
+    "api_key":     "6558d5b67a784007b0e97938952b5e49",
+    "api_tps":     3
 }

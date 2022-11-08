@@ -6,10 +6,11 @@ from copy import deepcopy as copy
 from elasticsearch import Elasticsearch as ES
 from elasticsearch.helpers import streaming_bulk as bulk
 import requests
+from pathlib import Path
 from common import *
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 #-GLOBAL OBJECTS----------------------------------------------------------------------------------------------------------------------------------
-_index            = sys.argv[1]; #'geocite' #'outcite_ssoar' #'ssoar_gold'
+_index = sys.argv[1]; #'geocite' #'outcite_ssoar' #'ssoar_gold'
 
 IN = None;
 try:
@@ -31,11 +32,13 @@ _max_rel_diff = _configs['max_rel_diff']; #TODO: Adjust
 _recheck = _configs['recheck'];
 
 #====================================================================================
-_api_address = "https://api.bing.microsoft.com/v7.0/search"; #"https://api.bing.microsoft.com/v7.0/custom/search";
-_api_key     = "6558d5b67a784007b0e97938952b5e49"#"241948e1f88744068c3e7df046577981";#"8fd4bec3208a48319838efff6d3e08c0";
-_api_tps     = 3#100;#150
-_to_field    = 'bing_urls';
+_api_address = _configs['api_address'];#"https://api.bing.microsoft.com/v7.0/search"; #"https://api.bing.microsoft.com/v7.0/custom/search";
+_api_key     = _configs['api_key'];#"6558d5b67a784007b0e97938952b5e49"#"241948e1f88744068c3e7df046577981";#"8fd4bec3208a48319838efff6d3e08c0";
+_api_tps     = _configs['api_tps'];#3#100;#150
 #====================================================================================
+
+_to_field = 'bing_urls';
+
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 #-SCRIPT------------------------------------------------------------------------------------------------------------------------------------------
 
