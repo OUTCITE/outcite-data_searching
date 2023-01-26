@@ -10,7 +10,7 @@
                  "anystyle_references_from_cermine_refstrings",
                  "anystyle_references_from_grobid_fulltext",
                  "anystyle_references_from_grobid_refstrings",
-                 "cermine_references_from_cermine_refstrings",
+                 "cermine_references_from_cermine_xml",
                  "cermine_references_from_grobid_refstrings",
                  "grobid_references_from_grobid_xml",
                  "exparser_references_from_cermine_layout" ],

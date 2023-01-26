@@ -23,7 +23,7 @@ IN.close();
 _chunk_size       = _configs['chunk_size'];
 _max_scroll_tries = _configs['max_scroll_tries'];
 _scroll_size      = _configs['scroll_size'];
-_requestimeout    = _configs['requestimeout'];
+_request_timeout  = _configs['requestimeout'];
 
 _great_score  = _configs['great_score']; #TODO: Adjust
 _ok_score     = _configs['ok_score']; #TODO: Adjust
@@ -45,7 +45,7 @@ _to_field = 'bing_urls';
 _client = ES(['localhost'],scheme='http',port=9200,timeout=60);
 
 i = 0;
-for success, info in bulk(_client,search(_to_field,_index,_api_address,_api_key,_api_tps,_great_score,_ok_score,_max_rel_diff,_recheck),chunk_size=_chunk_size, request_timeout=_requestimeout):
+for success, info in bulk(_client,search(_to_field,_index,_api_address,_api_key,_api_tps,_great_score,_ok_score,_max_rel_diff,_recheck),chunk_size=_chunk_size, request_timeout=_request_timeout):
     i += 1;
     if not success:
         print('\n[!]-----> A document failed:', info['index']['_id'], info['index']['error'],'\n');
