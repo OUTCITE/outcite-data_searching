@@ -42,7 +42,7 @@ _to_field = 'bing_urls';
 #-------------------------------------------------------------------------------------------------------------------------------------------------
 #-SCRIPT------------------------------------------------------------------------------------------------------------------------------------------
 
-_client = ES(['localhost'],scheme='http',port=9200,timeout=60);
+_client = ES(['http://localhost:9200'],timeout=60);#ES(['localhost'],scheme='http',port=9200,timeout=60);
 
 i = 0;
 for success, info in bulk(_client,search(_to_field,_index,_api_address,_api_key,_api_tps,_great_score,_ok_score,_max_rel_diff,_recheck),chunk_size=_chunk_size, request_timeout=_request_timeout):

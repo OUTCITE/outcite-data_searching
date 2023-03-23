@@ -367,7 +367,7 @@ def search(field,index,api_address,api_key,api_tps,great_score,ok_score,max_rel_
     cur.execute("CREATE INDEX IF NOT EXISTS queries_query_index ON queries(query)"); #TODO: May want to load as dictionary and then executemany inserts at the end of session or every n iterations
     #----------------------------------------------------------------------------------------------------------------------------------
     print('------------------->',scr_query);
-    client   = ES(['localhost'],scheme='http',port=9200,timeout=60);
+    client   = ES(['http://localhost:9200'],timeout=60);#ES(['localhost'],scheme='http',port=9200,timeout=60);
     page     = client.search(index=index,scroll=str(int(_max_extract_time*_scroll_size))+'m',size=_scroll_size,query=scr_query,_source=[field]+_refobjs);
     sid      = page['_scroll_id'];
     returned = len(page['hits']['hits']);
