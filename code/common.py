@@ -273,7 +273,7 @@ def compare_refobject(P_dict,T_dict,threshold):                       # Two dict
         costs                                                          += [(TP_key,cost_,)                     for cost_                      in costs_      ];
     return TP/P, TP/T, TP, P, T, matches, mismatches, mapping, costs;
 
-def bing_web_search(query,api_address,api_key,api_tps):
+def bing_web_search(query,api_address,api_key,api_tps): #TODO: Surround in try-catch!
     time.sleep(1.0/api_tps) #TODO: Comment out!
     headers   = {"Ocp-Apim-Subscription-Key": api_key};
     params    = { "q": query, "textDecorations": False, "textFormat": "HTML", "count":3, "responseFilter":["Webpages"]};
