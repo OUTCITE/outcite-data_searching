@@ -1,3 +1,4 @@
+#-IMPORTS-----------------------------------------------------------------------------------------------------------------------------------------
 import numpy as np
 from scipy.optimize import linear_sum_assignment as LSA
 from copy import deepcopy as copy
@@ -13,7 +14,10 @@ from lxml import html as lhtml
 import signal
 from pathlib import Path
 from suffix_trees import STree
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+#-GLOBAL OBJECTS----------------------------------------------------------------------------------------------------------------------------------
 
+# LOADING THE CONFIGS CUSTOM IF AVAILABLE OTHERWISE THE DEFAULT CONFIGS FILE
 IN = None;
 try:
     IN = open(str((Path(__file__).parent / '../code/').resolve())+'/configs_custom.json');
@@ -22,24 +26,29 @@ except:
 _configs = json.load(IN);
 IN.close();
 
-_max_extract_time = _configs["max_extract_time"]; #minutes
+# MORE PARAMETERS FOR THE BULK UPDATING ELASTICSEARCH PROCESS
+_max_extract_time = _configs["max_extract_time"];
 _max_scroll_tries = _configs["max_scroll_tries"];
 _scroll_size      = _configs["scroll_size"];
 
+# MAXIMUM LENGTH FOR QUERY STRINGS
 _max_val_len   = _configs["max_val_len"];
 _min_title_len = _configs["min_title_len"];
 
-#'''
+# TOOLCHAINS / PIPELINES FROM WHICH TO OBTAIN THE REFERENCES THAT SHOULD BE LINKED TO WEBSITES
 _refobjs = _configs["refobjs"];
 
-_ids     = _configs["ids"];#['GaS_2000_0001'];#["gesis-ssoar-29359","gesis-ssoar-55603","gesis-ssoar-37157","gesis-ssoar-5917","gesis-ssoar-21970"];#None
+# IF ONLY SOME DOCUMENTS SHOULD BE UPDATED, WHICH ONES TO DO
+_ids = _configs["ids"];#['GaS_2000_0001'];#["gesis-ssoar-29359","gesis-ssoar-55603","gesis-ssoar-37157","gesis-ssoar-5917","gesis-ssoar-21970"];#None
 
+# DATABASE WHERE TO BUFFER THE QUERIES TO BING AND THE RESPECTIVE RESULTS
 _query_db = str((Path(__file__).parent / '../').resolve())+'/queries.db';
-#'''
-#_refobjs = [ 'anystyle_references_from_gold_refstrings' ];
 
+# REGEX FOR YEARS
 YEAR = re.compile(r'1[5-9][0-9]{2}|20(0[0-9]|1[0-9]|2[0-3])'); #1500--2023
-
+#-------------------------------------------------------------------------------------------------------------------------------------------------
+#-FUNCTIONS---------------------------------------------------------------------------------------------------------------------------------------
+'''
 def walk_down(pointer,match_keys):
     if len(match_keys)==0:
         yield pointer;
@@ -120,80 +129,6 @@ def transform(result,transformap):
                 del matchobj[key];
     return matchobj;
 
-def handler(signum, frame):
-    print("Took too long. Breaking...")
-    raise Exception("Timeout")
-
-def load_html(url):
-    IN    = urllib.request.urlopen(url);
-    bytes = IN.read();
-    html  = bytes.decode("utf8");
-    IN.close();
-    return html;
-
-def parse_html(string):
-    html = lhtml.fromstring(string);
-    return html;
-
-def html_extract_title(html):
-    for head in html.iter("head"):
-        for title in head.iter("title"):
-            return title.text;
-    return None;
-
-def url_complete(title,url):
-    if " ..." in title:
-        print(title,'seems to be abbreviated. Trying to load full title from',url,'...');
-        url_title = None;
-        signal.signal(signal.SIGALRM, handler);
-        signal.alarm(10);
-        try:
-            url_title = html_extract_title(parse_html(load_html(url)));
-        except Exception as e:
-            print(e,'\n','Failed to load title from URL.');
-        signal.alarm(0);
-        if url_title:
-            print('Got url title',url_title);
-            if len(url_title) > len(title):
-                title = url_title;
-    return title;
-
-def longest_common_substring(s1,s2):
-    st    = STree.STree([s1,s2]);
-    match = st.lcs();
-    return match, len(match);
-
-def longest_common_subsequence(s1,s2):
-    matrix = [["" for x in range(len(s2))] for x in range(len(s1))];
-    for i in range(len(s1)):
-        for j in range(len(s2)):
-            if s1[i] == s2[j]:
-                if i == 0 or j == 0:
-                    matrix[i][j] = s1[i];
-                else:
-                    matrix[i][j] = matrix[i-1][j-1] + s1[i];
-            else:
-                matrix[i][j] = max(matrix[i-1][j], matrix[i][j-1], key=len);
-    cs = matrix[-1][-1];
-    return cs, len(cs);
-
-def distance(a,b):
-    if min(len(a),len(b)) < _min_title_len:
-        return 1.0;
-    subseq,seqlen = longest_common_subsequence(a.lower(), b.lower());
-    distance      = 1-(seqlen / min([len(a),len(b)]));
-    print(a,'|',b,'|',subseq,'|',distance);
-    return distance;
-
-def distance_new(a,b): #TODO: I think this is better than the old version and it can be deployed
-    if min(len(a),len(b)) < _min_title_len:
-        return 1.0;
-    subseq,seqlen = longest_common_subsequence(a.lower(), b.lower());
-    substr,strlen = longest_common_substring(  a.lower(), b.lower());
-    distance      = 1-(strlen / seqlen);
-    print(a,'|',b,'|',subseq,'|',substr,'|',distance);
-    return distance;
-
 def flatten(d, parent_key='', sep='_'):
     items = [];
     for k, v in d.items():
@@ -272,7 +207,85 @@ def compare_refobject(P_dict,T_dict,threshold):                       # Two dict
         mapping                                                        += [(TP_key,assignment_0,assignment_1,) for assignment_0, assignment_1 in mapping_    ];
         costs                                                          += [(TP_key,cost_,)                     for cost_                      in costs_      ];
     return TP/P, TP/T, TP, P, T, matches, mismatches, mapping, costs;
+'''
 
+# DISTANCE FUNCTIONS TO BE USED TO SEE IF THE RETURNED WEBSITES MATCH THE CORRESPONSING REFERENCES
+def longest_common_substring(s1,s2):
+    st    = STree.STree([s1,s2]);
+    match = st.lcs();
+    return match, len(match);
+
+def longest_common_subsequence(s1,s2):
+    matrix = [["" for x in range(len(s2))] for x in range(len(s1))];
+    for i in range(len(s1)):
+        for j in range(len(s2)):
+            if s1[i] == s2[j]:
+                if i == 0 or j == 0:
+                    matrix[i][j] = s1[i];
+                else:
+                    matrix[i][j] = matrix[i-1][j-1] + s1[i];
+            else:
+                matrix[i][j] = max(matrix[i-1][j], matrix[i][j-1], key=len);
+    cs = matrix[-1][-1];
+    return cs, len(cs);
+
+def distance(a,b):
+    if min(len(a),len(b)) < _min_title_len:
+        return 1.0;
+    subseq,seqlen = longest_common_subsequence(a.lower(), b.lower());
+    distance      = 1-(seqlen / min([len(a),len(b)]));
+    print(a,'|',b,'|',subseq,'|',distance);
+    return distance;
+
+def distance_new(a,b): #TODO: I think this is better than the old version and it can be deployed
+    if min(len(a),len(b)) < _min_title_len:
+        return 1.0;
+    subseq,seqlen = longest_common_subsequence(a.lower(), b.lower());
+    substr,strlen = longest_common_substring(  a.lower(), b.lower());
+    distance      = 1-(strlen / seqlen);
+    print(a,'|',b,'|',subseq,'|',substr,'|',distance);
+    return distance;
+
+# BECAUSE THE SNIPPET MAY NOT RETURN FULL WEBSITE TITLE, SOME FUNCTIONS TO COMPLETE IT
+def handler(signum, frame):
+    print("Took too long. Breaking...")
+    raise Exception("Timeout")
+
+def load_html(url):
+    IN    = urllib.request.urlopen(url);
+    bytes = IN.read();
+    html  = bytes.decode("utf8");
+    IN.close();
+    return html;
+
+def parse_html(string):
+    html = lhtml.fromstring(string);
+    return html;
+
+def html_extract_title(html):
+    for head in html.iter("head"):
+        for title in head.iter("title"):
+            return title.text;
+    return None;
+
+def url_complete(title,url):
+    if " ..." in title:
+        print(title,'seems to be abbreviated. Trying to load full title from',url,'...');
+        url_title = None;
+        signal.signal(signal.SIGALRM, handler);
+        signal.alarm(10);
+        try:
+            url_title = html_extract_title(parse_html(load_html(url)));
+        except Exception as e:
+            print(e,'\n','Failed to load title from URL.');
+        signal.alarm(0);
+        if url_title:
+            print('Got url title',url_title);
+            if len(url_title) > len(title):
+                title = url_title;
+    return title;
+
+# THE ACTUAL WEBSEARCH USAGE OF BING API
 def bing_web_search(query,api_address,api_key,api_tps): #TODO: Surround in try-catch!
     time.sleep(1.0/api_tps) #TODO: Comment out!
     headers   = {"Ocp-Apim-Subscription-Key": api_key};
@@ -282,7 +295,7 @@ def bing_web_search(query,api_address,api_key,api_tps): #TODO: Surround in try-c
     results   = [{'title':url_complete(page['name'],page['url']), 'url':page['url'], 'snippet':page['snippet'], 'language':page['language']} for page in responses['webPages']['value'] if 'name' in page and 'url' in page and 'snippet' in page and 'language' in page] if 'webPages' in responses and 'value' in responses['webPages'] and len(responses['webPages']['value'])>0 else [];
     return results;
 
-
+# OF THE RETURNED WEBSITES FIND THE BEST MATCHING ONE, WHICH WOULD ALSO BE ABLE TO FILTER OUT ALL WEBSITES IF NONE MATCHES
 def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff,cur):
     #-----------------------------------------------------------------------------------------------------
     #TITLE = True if 'title' in refobj and refobj['title'] else False;
@@ -335,6 +348,7 @@ def get_best_match(search_function,args,refobj,great_score,ok_score,max_rel_diff
     print(len(results_),' of 3 results left after checking.');
     return results_[0]['url'] if len(results_)>0 else None;
 
+# THE MAIN FUNCTION THAT DOES THE WEBSEARCH AND SUBSEQUENT FILTERING GIVEN REFERENCE OBJECTS
 def find(refobjects,index,api_address,api_key,api_tps,field,great_score,ok_score,max_rel_diff,cur):
     ids = [];
     for i in range(len(refobjects)):
@@ -355,6 +369,7 @@ def find(refobjects,index,api_address,api_key,api_tps,field,great_score,ok_score
             ids.append(ID);
     return set(ids), refobjects;
 
+# THE MAIN FUNCTION SCROLLING OVER THE INPUT INDEX AND UPDATING THE REFERENCES WITH THE MATCHING WEBSITES
 def search(field,index,api_address,api_key,api_tps,great_score,ok_score,max_rel_diff,recheck):
     #----------------------------------------------------------------------------------------------------------------------------------
     body            = { '_op_type': 'update', '_index': index, '_id': None, '_source': { 'doc': { 'processed_'+field: False, 'has_'+field: False, field: None } } }; #TODO: The scroll query is both wrong and does not work!
@@ -405,3 +420,4 @@ def search(field,index,api_address,api_key,api_tps,great_score,ok_score,max_rel_
                 time.sleep(3); continue;
             break;
     client.clear_scroll(scroll_id=sid);
+#-------------------------------------------------------------------------------------------------------------------------------------------------
