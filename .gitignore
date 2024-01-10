@@ -1,0 +1,3 @@
+code/__pycache__/
+*.db
+code/configs_custom.json
